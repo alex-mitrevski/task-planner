@@ -4,13 +4,13 @@
 set -e
 
 # Fast-downward planner with the desired version
-PLANNER_NAME=fast-downward-19.06
+PLANNER_NAME=fast-downward-24.06.1
 
 TARBALL="${PLANNER_NAME}.tar.gz"
-TARBALL_URL="http://www.fast-downward.org/Releases/19.06?action=AttachFile&do=get&target=${TARBALL}"
+TARBALL_URL="https://www.fast-downward.org/latest/files/release24.06/${TARBALL}"
 
 # Install paths
-INSTALL_DIR_ROOT="/opt/ropod/task-planner/bin"
+INSTALL_DIR_ROOT="bin"
 INSTALL_DIR_NAME="fast-downward"
 INSTALL_DIR=$INSTALL_DIR_ROOT/$INSTALL_DIR_NAME
 
@@ -24,7 +24,7 @@ fi
 echo "Installing LAMA planner"
 cd $INSTALL_DIR_ROOT
 wget $TARBALL_URL -O $TARBALL
-tar sxvf $TARBALL
+tar -xzvf $TARBALL
 mv $PLANNER_NAME $INSTALL_DIR_NAME
 rm -f $TARBALL
-python $INSTALL_DIR_NAME/build.py
+python3 $INSTALL_DIR_NAME/build.py

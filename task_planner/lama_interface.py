@@ -1,20 +1,14 @@
 import os
 from os import listdir
 from os.path import join
-from typing import Tuple, Sequence
 import uuid
 import subprocess
 import numpy as np
-import logging
-
-from ropod.structs.task import TaskRequest
-from ropod.structs.action import Action
-from ropod.structs.area import Area
 
 from task_planner.planner_interface import TaskPlannerInterface
-from task_planner.knowledge_base_interface import Predicate
+from task_planner.knowledge_base_interface import Fluent
 from task_planner.action_models import ActionModelLibrary
-from task_planner.knowledge_models import PDDLPredicateLibrary, PDDLFluentLibrary,\
+from task_planner.knowledge_models import PDDLFluentLibrary,\
                                           PDDLNumericFluentLibrary
 
 
@@ -26,90 +20,73 @@ class LAMAInterface(TaskPlannerInterface):
         super(LAMAInterface, self).__init__(kb_database_name, domain_file,
                                             planner_cmd, plan_file_path,
                                             debug)
-        self.logger = logging.getLogger('task.planner')
 
-    def plan(self, task_request: TaskRequest, robot: str, task_goals: list=None):
-        '''
-        task_goals can be a list of any of the following variation of Predicate object
-            - Object itself
-            - tuple
-            - dict
-        '''
-        # TODO: check if there are already goals in the knowledge base and,
-        # if yes, add them to the task_goals list
-
-        predicate_task_goals = []
+    def plan(self, robot: str, task_goals: list=None):
+        task_goal_fluents = []
         for task_goal in task_goals:
-            if isinstance(task_goal, Predicate):
-                predicate_task_goals.append(task_goal)
+            if isinstance(task_goal, Fluent):
+                task_goal_fluents.append(task_goal)
             elif isinstance(task_goal, tuple):
-                predicate_task_goals.append(Predicate.from_tuple(task_goal))
+                task_goal_fluents.append(Fluent.from_tuple(task_goal))
             elif isinstance(task_goal, dict):
-                predicate_task_goals.append(Predicate.from_dict(task_goal))
+                task_goal_fluents.append(Fluent.from_dict(task_goal))
             else:
-                raise Exception('Invalid type to task_goal encountered')
+                raise ValueError('Invalid type of task_goal encountered')
 
-        kb_predicate_assertions = self.kb_interface.get_predicate_assertions()
         kb_fluent_assertions = self.kb_interface.get_fluent_assertions()
 
-        self.logger.info('Generating problem file')
-        problem_file = self.generate_problem_file(kb_predicate_assertions,
-                                                  kb_fluent_assertions,
-                                                  predicate_task_goals)
+        print('Generating problem file')
+        problem_file = self.generate_problem_file(kb_fluent_assertions,
+                                                  task_goal_fluents)
 
         planner_cmd = self.planner_cmd.replace('PROBLEM', problem_file)
         planner_cmd = planner_cmd.replace('PLAN-FILE', join(self.plan_file_path,
                                                             self._plan_file_name))
         planner_cmd_elements = planner_cmd.split()
 
-        self.logger.info('Planning task...')
+        print('Planning task...')
         subprocess.run(planner_cmd_elements)
-        self.logger.info('Planning finished')
+        print('Planning finished')
 
-        self.logger.info('Parsing plans...')
-        plan_found, plan = self.parse_plan(task_request.load_type, robot)
+        print('Parsing plans...')
+        plan_found, plan = self.parse_plan(robot)
 
-        self.logger.info('Removing problem file...')
+        print('Removing problem file...')
         os.remove(problem_file)
-        self.logger.info('Planner done')
+        print('Planner done')
 
         return plan_found, plan
 
-    def generate_problem_file(self, predicate_assertions: list,
-                              fluent_assertions: list,
-                              task_goals: Sequence[Predicate]) -> str:
+    def generate_problem_file(self, fluent_assertions: list,
+                              task_goals: list[Fluent]) -> str:
         obj_types = {}
         init_state_str = ''
 
-        # we generate strings from the predicate assertions of the form
-        # (predicate_name param_1 param_2 ... param_n)
-        for assertion in predicate_assertions:
-            ordered_param_list, obj_types = PDDLPredicateLibrary.get_assertion_param_list(assertion.name,
-                                                                                          assertion.params,
-                                                                                          obj_types)
-            assertion_str = '        ({0} {1})\n'.format(assertion.name, ' '.join(ordered_param_list))
-            init_state_str += assertion_str
-
-
         # for numeric fluents, we generate strings of the form
-        # (= (fluent_name param_1 param_2 ... param_n) fluent_value); otherwise,
-        # we generate strings just like for predicate assertions
+        # (= (fluent_name param_1 param_2 ... param_n) fluent_value);
+        # otherwise, we generate strings of the form
+        # (predicate_name param_1 param_2 ... param_n)
         for assertion in fluent_assertions:
-            if hasattr(PDDLPredicateLibrary, assertion.name):
-                ordered_param_list, obj_types = PDDLPredicateLibrary.get_assertion_param_list(assertion.name,
-                                                                                              assertion.params,
-                                                                                              obj_types)
-                assertion_str = '        ({0} {1} {2})\n'.format(assertion.name,
-                                                                 ' '.join(ordered_param_list),
-                                                                 assertion.value)
-            elif hasattr(PDDLFluentLibrary, assertion.name):
+            if hasattr(PDDLFluentLibrary, assertion.name):
                 ordered_param_list, obj_types = PDDLFluentLibrary.get_assertion_param_list(assertion.name,
                                                                                            assertion.params,
                                                                                            assertion.value,
                                                                                            obj_types)
-                assertion_str = '        ({0} {1} {2})\n'.format(assertion.name,
-                                                                 ' '.join(ordered_param_list),
-                                                                 assertion.value)
+
+                # if the fluent assertion contains a value that is not of Boolean type,
+                # we explicitly add the value to the assertion string; otherwise,
+                # we just add the fluent parameters and ensure that the assertion
+                # corresponds to the asserted truth value
+                if assertion.value.lower() != 'true' and assertion.value.lower() != 'false':
+                    assertion_str = '        ({0} {1} {2})\n'.format(assertion.name,
+                                                                    ' '.join(ordered_param_list),
+                                                                    assertion.value)
+                elif assertion.value.lower() == 'true':
+                    assertion_str = '        ({0} {1})\n'.format(assertion.name,
+                                                                 ' '.join(ordered_param_list))
+                elif assertion.value.lower() == 'false':
+                    assertion_str = '        not ({0} {1})\n'.format(assertion.name,
+                                                                     ' '.join(ordered_param_list))
             else:
                 ordered_param_list, obj_types = PDDLNumericFluentLibrary.get_assertion_param_list(assertion.name,
                                                                                                   assertion.params,
@@ -146,9 +123,16 @@ class LAMAInterface(TaskPlannerInterface):
         # )
         goal_str = ''
         for task_goal in task_goals:
-            goal_predicate, goal_params = task_goal.name, task_goal.params
-            goal_str += '            ({0} {1})\n'.format(goal_predicate,
-                                                         ' '.join([param.value for param in goal_params]))
+            if task_goal.value.lower() != 'true' and task_goal.value.lower() != 'false':
+                goal_str += '            ({0} {1} {2})\n'.format(task_goal.name,
+                                                                 ' '.join([param.value for param in task_goal.params]),
+                                                                 task_goal.value)
+            elif task_goal.value.lower() == 'true':
+                goal_str += '        ({0} {1})\n'.format(task_goal.name,
+                                                         ' '.join([param.value for param in task_goal.params]))
+            elif task_goal.value.lower() == 'false':
+                assertion_str += '        not ({0} {1})\n'.format(task_goal.name,
+                                                                  ' '.join([param.value for param in task_goal.params]))
         goal_str = '    (:goal\n        (and\n{0}        )\n    )\n'.format(goal_str)
 
         # we finally write the problem file, which will be in the format
@@ -166,7 +150,7 @@ class LAMAInterface(TaskPlannerInterface):
         # )
         problem_file_name = 'problem_{0}.pddl'.format(str(uuid.uuid4()))
         problem_file_abs_path = join(self.plan_file_path, problem_file_name)
-        self.logger.info('Generating planning problem...')
+        print('Generating planning problem...')
         with open(problem_file_abs_path, 'w') as problem_file:
             header = '(define (problem ropod)\n'
             header += '    (:domain {0})\n'.format(self.domain_name)
@@ -177,11 +161,11 @@ class LAMAInterface(TaskPlannerInterface):
             problem_file.write(')\n')
         return problem_file_abs_path
 
-    def parse_plan(self, task: str, robot: str) -> Tuple[bool, list]:
+    def parse_plan(self, robot: str) -> tuple[bool, list]:
         plan_files = [f for f in listdir(self.plan_file_path)
                       if f.find(self._plan_file_name) != -1]
         if not plan_files:
-            self.logger.error('Plan for task %s and robot %s not found', task, robot)
+            print(f'Plan for robot {robot} not found')
             return False, []
 
         plans = []
@@ -198,28 +182,9 @@ class LAMAInterface(TaskPlannerInterface):
                     else:
                         action_line = line.strip()[1:-1]
                         action = self.process_action_str(action_line)
-                        for i in range(len(action.areas)):
-                            # we capitalise the area name since the planner writes
-                            # all areas with small letters, while the OSM convention
-                            # is to have all letters in the name capitalised
-                            action.areas[i].name = action.areas[i].name.upper()
-
-                            floor_fluent = ('location_floor', [('loc', action.areas[i].name)])
-                            floor = self.kb_interface.get_fluent_value(floor_fluent)
-
-                            # "floor" is either a string of the form "floorX"
-                            # or the "unknown" string; we thus throw away the word
-                            # "floor" to get the actual floor number - or catch an
-                            # exception and set a default unreasonable floor
-                            # if the floor is not known
-                            try:
-                                floor_number = int(floor[5:])
-                            except ValueError:
-                                floor_number = -100
-                            action.areas[i].floor_number = floor_number
                         plan.append(action)
                         plan_action_strings.append(action_line)
-                        self.logger.debug(action_line)
+                        print(action_line)
                 plans.append(plan)
                 action_strings_per_plan.append(plan_action_strings)
             os.remove(current_plan_file_path)
@@ -227,15 +192,15 @@ class LAMAInterface(TaskPlannerInterface):
         plan_lengths = [len(plan) for plan in plans]
         shortest_plan_idx = np.argmin(plan_lengths)
 
-        self.logger.info('Plan for task %s and robot %s found', task, robot)
-        self.logger.debug('Action sequence:')
-        self.logger.debug('-------------------------------')
+        print(f'Plan for robot {robot} found')
+        print('Action sequence:')
+        print('-------------------------------')
         for action_string in action_strings_per_plan[shortest_plan_idx]:
-            self.logger.debug(action_string)
-        self.logger.debug('-------------------------------')
+            print(action_string)
+        print('-------------------------------')
         return True, plans[shortest_plan_idx]
 
-    def process_action_str(self, action_line: str) -> Action:
+    def process_action_str(self, action_line: str):
         action_data = action_line.split()
         action_name = action_data[0].upper()
         action_params = action_data[1:]

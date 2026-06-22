@@ -5,13 +5,12 @@ import unittest
 import pymongo as pm
 import yaml
 
-from ropod.structs.task import TaskRequest
 from task_planner.lama_interface import LAMAInterface
 
 def get_planner_config(config_file_path):
     planner_config_params = None
     with open(config_file_path, 'r') as config_file:
-        planner_config_params = yaml.load(config_file)
+        planner_config_params = yaml.safe_load(config_file)
     return planner_config_params
 
 class LamaPlannerTest(unittest.TestCase):
@@ -34,14 +33,14 @@ class LamaPlannerTest(unittest.TestCase):
         self._drop_test_db()
 
     def test_robot_cart_same_location_delivery_same_floor(self):
-        state_facts = [('empty_gripper', [('bot', 'frank')])]
-        state_fluents = [('robot_at', [('bot', 'frank')], 'PICKUP_LOCATION'),
+        state_fluents = [('empty_gripper', [('bot', 'frank')], 'true'),
+                         ('robot_at', [('bot', 'frank')], 'PICKUP_LOCATION'),
                          ('load_at', [('load', 'mobidik')], 'PICKUP_LOCATION')]
 
-        floor_facts = [('elevator_at', [('elevator', 'toma_elevator'), ('loc', 'ELEVATOR0')]),
-                       ('elevator_at', [('elevator', 'toma_elevator'), ('loc', 'ELEVATOR1')]),
-                       ('elevator_at', [('elevator', 'toma_elevator'), ('loc', 'ELEVATOR2')])]
-        floor_fluents = [('robot_floor', [('bot', 'frank')], 'floor0'),
+        floor_fluents = [('elevator_at', [('elevator', 'toma_elevator'), ('loc', 'ELEVATOR0')], 'true'),
+                         ('elevator_at', [('elevator', 'toma_elevator'), ('loc', 'ELEVATOR1')], 'true'),
+                         ('elevator_at', [('elevator', 'toma_elevator'), ('loc', 'ELEVATOR2')], 'true'),
+                         ('robot_floor', [('bot', 'frank')], 'floor0'),
                          ('load_floor', [('load', 'mobidik')], 'floor0'),
                          ('elevator_floor', [('elevator', 'toma_elevator')], 'unknown'),
                          ('destination_floor', [('elevator', 'toma_elevator')], 'unknown'),
@@ -50,22 +49,16 @@ class LamaPlannerTest(unittest.TestCase):
                          ('location_floor', [('loc', 'ELEVATOR0')], 'floor0'),
                          ('location_floor', [('loc', 'ELEVATOR2')], 'floor2')]
 
-        self.planner_interface.kb_interface.insert_facts(state_facts)
-        self.planner_interface.kb_interface.insert_facts(floor_facts)
         self.planner_interface.kb_interface.insert_fluents(state_fluents)
         self.planner_interface.kb_interface.insert_fluents(floor_fluents)
 
-        task_request = TaskRequest()
-        task_request.load_id = 'mobidik'
-        task_request.delivery_pose.id = 'DELIVERY_LOCATION'
+        load_id = 'mobidik'
+        delivery_pose_id = 'DELIVERY_LOCATION'
 
-        task_goals = [('load_at', [('load', task_request.load_id),
-                                   ('loc', task_request.delivery_pose.id)]),
-                      ('empty_gripper', [('bot', 'frank')])]
-        plan_found, plan = self.planner_interface.plan(task_request, 'frank', task_goals)
+        task_goals = [('load_at', [('load', load_id)], delivery_pose_id),
+                      ('empty_gripper', [('bot', 'frank')], 'true')]
+        plan_found, plan = self.planner_interface.plan('frank', task_goals)
 
-        self.planner_interface.kb_interface.remove_facts(state_facts)
-        self.planner_interface.kb_interface.remove_facts(floor_facts)
         self.planner_interface.kb_interface.remove_fluents(state_fluents)
         self.planner_interface.kb_interface.remove_fluents(floor_fluents)
 
@@ -82,14 +75,14 @@ class LamaPlannerTest(unittest.TestCase):
         assert expected_action_sequence == obtained_action_sequence
 
     def test_robot_cart_same_location_delivery_diff_floor(self):
-        state_facts = [('empty_gripper', [('bot', 'frank')])]
-        state_fluents = [('robot_at', [('bot', 'frank')], 'PICKUP_LOCATION'),
+        state_fluents = [('empty_gripper', [('bot', 'frank')], 'true'),
+                         ('robot_at', [('bot', 'frank')], 'PICKUP_LOCATION'),
                          ('load_at', [('load', 'mobidik')], 'PICKUP_LOCATION')]
 
-        floor_facts = [('elevator_at', [('elevator', 'toma_elevator'), ('loc', 'ELEVATOR0')]),
-                       ('elevator_at', [('elevator', 'toma_elevator'), ('loc', 'ELEVATOR1')]),
-                       ('elevator_at', [('elevator', 'toma_elevator'), ('loc', 'ELEVATOR2')])]
-        floor_fluents = [('robot_floor', [('bot', 'frank')], 'floor0'),
+        floor_fluents = [('elevator_at', [('elevator', 'toma_elevator'), ('loc', 'ELEVATOR0')], 'true'),
+                         ('elevator_at', [('elevator', 'toma_elevator'), ('loc', 'ELEVATOR1')], 'true'),
+                         ('elevator_at', [('elevator', 'toma_elevator'), ('loc', 'ELEVATOR2')], 'true'),
+                         ('robot_floor', [('bot', 'frank')], 'floor0'),
                          ('load_floor', [('load', 'mobidik')], 'floor0'),
                          ('elevator_floor', [('elevator', 'toma_elevator')], 'unknown'),
                          ('destination_floor', [('elevator', 'toma_elevator')], 'unknown'),
@@ -98,22 +91,16 @@ class LamaPlannerTest(unittest.TestCase):
                          ('location_floor', [('loc', 'ELEVATOR0')], 'floor0'),
                          ('location_floor', [('loc', 'ELEVATOR2')], 'floor2')]
 
-        self.planner_interface.kb_interface.insert_facts(state_facts)
-        self.planner_interface.kb_interface.insert_facts(floor_facts)
         self.planner_interface.kb_interface.insert_fluents(state_fluents)
         self.planner_interface.kb_interface.insert_fluents(floor_fluents)
 
-        task_request = TaskRequest()
-        task_request.load_id = 'mobidik'
-        task_request.delivery_pose.id = 'DELIVERY_LOCATION'
+        load_id = 'mobidik'
+        delivery_pose_id = 'DELIVERY_LOCATION'
 
-        task_goals = [('load_at', [('load', task_request.load_id),
-                                   ('loc', task_request.delivery_pose.id)]),
-                      ('empty_gripper', [('bot', 'frank')])]
-        plan_found, plan = self.planner_interface.plan(task_request, 'frank', task_goals)
+        task_goals = [('load_at', [('load', load_id)], delivery_pose_id),
+                      ('empty_gripper', [('bot', 'frank')], 'true')]
+        plan_found, plan = self.planner_interface.plan('frank', task_goals)
 
-        self.planner_interface.kb_interface.remove_facts(state_facts)
-        self.planner_interface.kb_interface.remove_facts(floor_facts)
         self.planner_interface.kb_interface.remove_fluents(state_fluents)
         self.planner_interface.kb_interface.remove_fluents(floor_fluents)
 
@@ -144,14 +131,14 @@ class LamaPlannerTest(unittest.TestCase):
                (allowed_action_sequence2 == obtained_action_sequence)
 
     def test_robot_cart_same_floor(self):
-        state_facts = [('empty_gripper', [('bot', 'frank')])]
-        state_fluents = [('robot_at', [('bot', 'frank')], 'CHARGING_STATION'),
+        state_fluents = [('empty_gripper', [('bot', 'frank')], 'true'),
+                         ('robot_at', [('bot', 'frank')], 'CHARGING_STATION'),
                          ('load_at', [('load', 'mobidik')], 'PICKUP_LOCATION')]
 
-        floor_facts = [('elevator_at', [('elevator', 'toma_elevator'), ('loc', 'ELEVATOR0')]),
-                       ('elevator_at', [('elevator', 'toma_elevator'), ('loc', 'ELEVATOR1')]),
-                       ('elevator_at', [('elevator', 'toma_elevator'), ('loc', 'ELEVATOR2')])]
-        floor_fluents = [('robot_floor', [('bot', 'frank')], 'floor0'),
+        floor_fluents = [('elevator_at', [('elevator', 'toma_elevator'), ('loc', 'ELEVATOR0')], 'true'),
+                         ('elevator_at', [('elevator', 'toma_elevator'), ('loc', 'ELEVATOR1')], 'true'),
+                         ('elevator_at', [('elevator', 'toma_elevator'), ('loc', 'ELEVATOR2')], 'true'),
+                         ('robot_floor', [('bot', 'frank')], 'floor0'),
                          ('load_floor', [('load', 'mobidik')], 'floor0'),
                          ('elevator_floor', [('elevator', 'toma_elevator')], 'unknown'),
                          ('destination_floor', [('elevator', 'toma_elevator')], 'unknown'),
@@ -161,22 +148,16 @@ class LamaPlannerTest(unittest.TestCase):
                          ('location_floor', [('loc', 'ELEVATOR0')], 'floor0'),
                          ('location_floor', [('loc', 'ELEVATOR2')], 'floor0')]
 
-        self.planner_interface.kb_interface.insert_facts(state_facts)
-        self.planner_interface.kb_interface.insert_facts(floor_facts)
         self.planner_interface.kb_interface.insert_fluents(state_fluents)
         self.planner_interface.kb_interface.insert_fluents(floor_fluents)
 
-        task_request = TaskRequest()
-        task_request.load_id = 'mobidik'
-        task_request.delivery_pose.id = 'DELIVERY_LOCATION'
+        load_id = 'mobidik'
+        delivery_pose_id = 'DELIVERY_LOCATION'
 
-        task_goals = [('load_at', [('load', task_request.load_id),
-                                   ('loc', task_request.delivery_pose.id)]),
-                      ('empty_gripper', [('bot', 'frank')])]
-        plan_found, plan = self.planner_interface.plan(task_request, 'frank', task_goals)
+        task_goals = [('load_at', [('load', load_id)], delivery_pose_id),
+                      ('empty_gripper', [('bot', 'frank')], 'true')]
+        plan_found, plan = self.planner_interface.plan('frank', task_goals)
 
-        self.planner_interface.kb_interface.remove_facts(state_facts)
-        self.planner_interface.kb_interface.remove_facts(floor_facts)
         self.planner_interface.kb_interface.remove_fluents(state_fluents)
         self.planner_interface.kb_interface.remove_fluents(floor_fluents)
 
@@ -194,14 +175,14 @@ class LamaPlannerTest(unittest.TestCase):
         assert expected_action_sequence == obtained_action_sequence
 
     def test_delivery_location_diff_floor(self):
-        state_facts = [('empty_gripper', [('bot', 'frank')])]
-        state_fluents = [('robot_at', [('bot', 'frank')], 'CHARGING_STATION'),
+        state_fluents = [('empty_gripper', [('bot', 'frank')], 'true'),
+                         ('robot_at', [('bot', 'frank')], 'CHARGING_STATION'),
                          ('load_at', [('load', 'mobidik')], 'PICKUP_LOCATION')]
 
-        floor_facts = [('elevator_at', [('elevator', 'toma_elevator'), ('loc', 'ELEVATOR0')]),
-                       ('elevator_at', [('elevator', 'toma_elevator'), ('loc', 'ELEVATOR1')]),
-                       ('elevator_at', [('elevator', 'toma_elevator'), ('loc', 'ELEVATOR2')])]
-        floor_fluents = [('robot_floor', [('bot', 'frank')], 'floor0'),
+        floor_fluents = [('elevator_at', [('elevator', 'toma_elevator'), ('loc', 'ELEVATOR0')], 'true'),
+                         ('elevator_at', [('elevator', 'toma_elevator'), ('loc', 'ELEVATOR1')], 'true'),
+                         ('elevator_at', [('elevator', 'toma_elevator'), ('loc', 'ELEVATOR2')], 'true'),
+                         ('robot_floor', [('bot', 'frank')], 'floor0'),
                          ('load_floor', [('load', 'mobidik')], 'floor0'),
                          ('elevator_floor', [('elevator', 'toma_elevator')], 'unknown'),
                          ('destination_floor', [('elevator', 'toma_elevator')], 'unknown'),
@@ -211,22 +192,16 @@ class LamaPlannerTest(unittest.TestCase):
                          ('location_floor', [('loc', 'ELEVATOR0')], 'floor0'),
                          ('location_floor', [('loc', 'ELEVATOR2')], 'floor2')]
 
-        self.planner_interface.kb_interface.insert_facts(state_facts)
-        self.planner_interface.kb_interface.insert_facts(floor_facts)
         self.planner_interface.kb_interface.insert_fluents(state_fluents)
         self.planner_interface.kb_interface.insert_fluents(floor_fluents)
 
-        task_request = TaskRequest()
-        task_request.load_id = 'mobidik'
-        task_request.delivery_pose.id = 'DELIVERY_LOCATION'
+        load_id = 'mobidik'
+        delivery_pose_id = 'DELIVERY_LOCATION'
 
-        task_goals = [('load_at', [('load', task_request.load_id),
-                                   ('loc', task_request.delivery_pose.id)]),
-                      ('empty_gripper', [('bot', 'frank')])]
-        plan_found, plan = self.planner_interface.plan(task_request, 'frank', task_goals)
+        task_goals = [('load_at', [('load', load_id)], delivery_pose_id),
+                      ('empty_gripper', [('bot', 'frank')], 'true')]
+        plan_found, plan = self.planner_interface.plan('frank', task_goals)
 
-        self.planner_interface.kb_interface.remove_facts(state_facts)
-        self.planner_interface.kb_interface.remove_facts(floor_facts)
         self.planner_interface.kb_interface.remove_fluents(state_fluents)
         self.planner_interface.kb_interface.remove_fluents(floor_fluents)
 
@@ -260,14 +235,14 @@ class LamaPlannerTest(unittest.TestCase):
                (allowed_action_sequence2 == obtained_action_sequence)
 
     def test_robot_cart_diff_floors(self):
-        state_facts = [('empty_gripper', [('bot', 'frank')])]
-        state_fluents = [('robot_at', [('bot', 'frank')], 'CHARGING_STATION'),
+        state_fluents = [('empty_gripper', [('bot', 'frank')], 'true'),
+                         ('robot_at', [('bot', 'frank')], 'CHARGING_STATION'),
                          ('load_at', [('load', 'mobidik')], 'PICKUP_LOCATION')]
 
-        floor_facts = [('elevator_at', [('elevator', 'toma_elevator'), ('loc', 'ELEVATOR0')]),
-                       ('elevator_at', [('elevator', 'toma_elevator'), ('loc', 'ELEVATOR1')]),
-                       ('elevator_at', [('elevator', 'toma_elevator'), ('loc', 'ELEVATOR2')])]
-        floor_fluents = [('robot_floor', [('bot', 'frank')], 'floor0'),
+        floor_fluents = [('elevator_at', [('elevator', 'toma_elevator'), ('loc', 'ELEVATOR0')], 'true'),
+                         ('elevator_at', [('elevator', 'toma_elevator'), ('loc', 'ELEVATOR1')], 'true'),
+                         ('elevator_at', [('elevator', 'toma_elevator'), ('loc', 'ELEVATOR2')], 'true'),
+                         ('robot_floor', [('bot', 'frank')], 'floor0'),
                          ('load_floor', [('load', 'mobidik')], 'floor2'),
                          ('elevator_floor', [('elevator', 'toma_elevator')], 'unknown'),
                          ('destination_floor', [('elevator', 'toma_elevator')], 'unknown'),
@@ -278,22 +253,16 @@ class LamaPlannerTest(unittest.TestCase):
                          ('location_floor', [('loc', 'ELEVATOR1')], 'floor1'),
                          ('location_floor', [('loc', 'ELEVATOR2')], 'floor2')]
 
-        self.planner_interface.kb_interface.insert_facts(state_facts)
-        self.planner_interface.kb_interface.insert_facts(floor_facts)
         self.planner_interface.kb_interface.insert_fluents(state_fluents)
         self.planner_interface.kb_interface.insert_fluents(floor_fluents)
 
-        task_request = TaskRequest()
-        task_request.load_id = 'mobidik'
-        task_request.delivery_pose.id = 'DELIVERY_LOCATION'
+        load_id = 'mobidik'
+        delivery_pose_id = 'DELIVERY_LOCATION'
 
-        task_goals = [('load_at', [('load', task_request.load_id),
-                                   ('loc', task_request.delivery_pose.id)]),
-                      ('empty_gripper', [('bot', 'frank')])]
-        plan_found, plan = self.planner_interface.plan(task_request, 'frank', task_goals)
+        task_goals = [('load_at', [('load', load_id)], delivery_pose_id),
+                      ('empty_gripper', [('bot', 'frank')], 'true')]
+        plan_found, plan = self.planner_interface.plan('frank', task_goals)
 
-        self.planner_interface.kb_interface.remove_facts(state_facts)
-        self.planner_interface.kb_interface.remove_facts(floor_facts)
         self.planner_interface.kb_interface.remove_fluents(state_fluents)
         self.planner_interface.kb_interface.remove_fluents(floor_fluents)
 

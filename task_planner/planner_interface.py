@@ -1,9 +1,6 @@
 from abc import abstractmethod
 from typing import Tuple
-from ropod.structs.task import TaskRequest
-from ropod.structs.action import Action
 from task_planner.knowledge_base_interface import KnowledgeBaseInterface
-
 
 class TaskPlannerInterface(object):
     def __init__(self, kb_database_name, domain_file, planner_cmd, plan_file_path, debug=False):
@@ -15,17 +12,17 @@ class TaskPlannerInterface(object):
         self.debug = debug
 
     @abstractmethod
-    def plan(self, task_request: TaskRequest,
-             robot: str, plan_goals: list=None):
+    def plan(self, task_request,
+             robot: str,
+             plan_goals: list=None):
         pass
 
     @abstractmethod
-    def generate_problem_file(self, predicate_assertions: list,
-                              fluent_assertions: list, task_goals: list) -> str:
+    def generate_problem_file(self, fluent_assertions: list, task_goals: list) -> str:
         pass
 
     @abstractmethod
-    def process_action_str(self, action_line: str) -> Action:
+    def process_action_str(self, action_line: str):
         pass
 
     @abstractmethod

@@ -1,7 +1,6 @@
 from typing import Tuple
 import pymongo as pm
 from bson.objectid import ObjectId
-import logging
 
 
 class AssertionTypes(object):
@@ -73,98 +72,6 @@ class PredicateParams(object):
 
     def __repr__(self) -> str:
         return "PredicateParams(" + str(self.to_dict()) + ")"
-
-class Predicate(object):
-    '''An object representing a predicate (predicate name and list of ground values).
-
-    @author Alex Mitrevski
-    @contact aleksandar.mitrevski@h-brs.de
-
-    '''
-    def __init__(self):
-        self.name = ''
-        self.params = []
-
-    def __eq__(self, other) -> bool:
-        '''Returns True if both the names and all parameters are the same.
-        '''
-        equal = False
-        if self.name == other.name:
-            equal = True
-            for param in self.params:
-                if param not in other.params:
-                    equal = False
-                    break
-        return equal
-
-    def to_dict(self) -> dict:
-        '''Converts the object to a dictionary with two keys - "name" and "params".
-        The value of "params" is a list of PredicateParams dictionaries.
-        '''
-        dict_predicate = {}
-        dict_predicate['name'] = self.name
-        dict_predicate['type'] = AssertionTypes.PREDICATE
-        dict_predicate['params'] = []
-        for param_data in self.params:
-            dict_params = param_data.to_dict()
-            dict_predicate['params'].append(dict_params)
-        return dict_predicate
-
-    def to_tuple(self) -> Tuple[str, list]:
-        '''Convert object to tuple containing 2 elements
-        name -- string
-        params -- list of tuple(str, str)
-        '''
-        return (self.name, [param.to_tuple() for param in self.params])
-
-    @staticmethod
-    def from_tuple(tuple_predicate: Tuple[str, list]):
-        '''Returns a Predicate object created from the input tuple.
-
-        Keyword arguments:
-        @param tuple_predicate -- a tuple with two entries, the first representing
-                                  the name of the predicate and the second a list of
-                                  ("name", "value") pairs for the predicate parameters
-
-        '''
-        predicate = Predicate()
-        predicate.name, tuple_data = tuple_predicate
-        for tuple_params in tuple_data:
-            params = PredicateParams.from_tuple(tuple_params)
-            predicate.params.append(params)
-        return predicate
-
-    @staticmethod
-    def from_dict(dict_predicate: dict):
-        '''Returns a Predicate object created from the input dictionary.
-
-        Keyword arguments:
-        @param dict_predicate -- a dictionary with two keys - "name" and "params",
-                                 where "params" is a list of PredicateParams
-                                 dictionaries
-
-        '''
-        predicate = Predicate()
-        predicate.name = dict_predicate['name']
-        dict_data = dict_predicate['params']
-        for dict_params in dict_data:
-            params = PredicateParams.from_dict(dict_params)
-            predicate.params.append(params)
-        return predicate
-
-    def __str__(self) -> str:
-        string = "Predicate(\n"
-        string += '\t' + 'name:' + str(self.name) + '\n'
-        string += '\t' + 'type:' + str(AssertionTypes.PREDICATE) + '\n'
-        string += '\t' + 'params:[' + '\n'
-        for param in self.params:
-            string += '\t\t' + str(param) + '\n'
-        string += '\t' + ']' + '\n'
-        string += ")"
-        return string
-
-    def __repr__(self) -> str:
-        return "Predicate(" + str(self.to_dict()) + ")"
 
 class Fluent(object):
     '''An object representing a fluent (fluent name, list of ground values, and fluent value).
@@ -274,18 +181,9 @@ class KnowledgeBaseInterface(object):
 
     '''
     def __init__(self, __kb_database_name='robot_store'):
+        self.db_client = pm.MongoClient()
         self.__kb_database_name = __kb_database_name
         self.__kb_collection_name = 'knowledge_base'
-        self.__goal_collection_name = 'goals'
-        self.logger = logging.getLogger('task.planner.kb.interface')
-
-    def get_predicate_names(self) -> list:
-        '''Returns a list of all stored predicate names in the knowledge base.
-        '''
-        collection = self.__get_kb_collection(self.__kb_collection_name)
-        predicate_cursor = collection.find({'type': AssertionTypes.PREDICATE})
-        names = list({p['name'] for p in predicate_cursor})
-        return names
 
     def get_fluent_names(self) -> list:
         '''Returns a list of all stored fluent names in the knowledge base.
@@ -295,39 +193,28 @@ class KnowledgeBaseInterface(object):
         names = list({f['name'] for f in fluent_cursor})
         return names
 
-    def get_predicate_assertions(self, predicate_name: str=None) -> list:
-        '''Returns a list of Predicate objects representing all assertions
-        of the given predicate in the knowledge base. If "predicate_name" is None,
-        returns all predicate assertions in the knowledge base.
+    def get_fluent_assertions(self, fluent_name: str=None) -> list:
+        '''Returns a list of Fluent objects representing all assertions
+        of the given fluent in the knowledge base. If "fluent_name" is None,
+        returns all fluent assertions in the knowledge base.
 
         Keyword arguments:
-        @param predicate_name: str -- name of a predicate in the knowledge base
-                                      (default None, in which case all assertions
-                                       are retrieved)
-
+        @param fluent_name: str -- name of a fluent in the knowledge base
+                                   (default None, in which case all
+                                   assertions are retrieved)
         '''
         instances = []
         collection = self.__get_kb_collection(self.__kb_collection_name)
-        if predicate_name:
-            pred_instance_count = collection.count_documents({'name': predicate_name})
-            if pred_instance_count == 0:
+        if fluent_name:
+            fluent_instance_count = collection.count_documents({'name': fluent_name})
+            if fluent_instance_count == 0:
                 return []
 
-            pred_instance_cursor = collection.find({'name': predicate_name})
-            instances = [Predicate.from_dict(p) for p in pred_instance_cursor]
+            fluent_instance_cursor = collection.find({'name': fluent_name})
+            instances = [Fluent.from_dict(p) for p in fluent_instance_cursor]
         else:
-            assertion_cursor = collection.find({'type': AssertionTypes.PREDICATE})
-            instances = [Predicate.from_dict(p) for p in assertion_cursor]
-        return instances
-
-    def get_fluent_assertions(self) -> list:
-        '''Returns a list of Fluent objects representing all fluent assertions
-        in the knowledge base.
-        '''
-        instances = []
-        collection = self.__get_kb_collection(self.__kb_collection_name)
-        assertion_cursor = collection.find({'type': AssertionTypes.FLUENT})
-        instances = [Fluent.from_dict(p) for p in assertion_cursor]
+            assertion_cursor = collection.find({'type': AssertionTypes.FLUENT})
+            instances = [Fluent.from_dict(p) for p in assertion_cursor]
         return instances
 
     def get_fluent_value(self, fluent: Tuple[str, list]) -> list:
@@ -362,92 +249,8 @@ class KnowledgeBaseInterface(object):
         if fluent_assertion:
             fluent_value = fluent_assertion['value']
         else:
-            self.logger.warning('Fluent %s not found', fluent_dict['name'])
+            print('Fluent %s not found', fluent_dict['name'])
         return fluent_value
-
-    def update_kb(self, facts_to_add: list, facts_to_remove: list) -> bool:
-        '''Inserts a list of facts into the knowledge base and removes
-        a list of facts from it.
-
-        Keyword arguments:
-        @param facts_to_add: list -- facts to add to the knowledge base. The entries are
-                                     tuples with two entries, the first representing
-                                     the name of the predicate and the second a list of
-                                     ("name", "value") pairs for the predicate parameters
-        @param facts_to_remove: list -- facts to remove from the knowledge base. The entries are
-                                        tuples with two entries, the first representing
-                                        the name of the predicate and the second a list of
-                                        ("name", "value") pairs for the predicate parameters
-
-        '''
-        insert_successful = True
-        removal_successful = True
-        if facts_to_add:
-            insert_successful = self.insert_facts(facts_to_add)
-
-        if facts_to_remove:
-            removal_successful = self.remove_facts(facts_to_remove)
-
-        return insert_successful and removal_successful
-
-    def insert_facts(self, fact_list: list) -> bool:
-        '''Inserts a list of facts into the knowledge base.
-
-        Keyword arguments:
-        @param facts_to_add: list -- facts to add to the knowledge base. The entries are
-                                     tuples with two entries, the first representing
-                                     the name of the predicate and the second a list of
-                                     ("name", "value") pairs for the predicate parameters
-
-        '''
-        try:
-            self.__insert_predicates(fact_list, self.__kb_collection_name)
-            return True
-        except Exception as exc:
-            self.logger.error('[insert_facts] Facts could not be inserted: ', exc_info=True)
-            return False
-
-    def remove_facts(self, fact_list: list) -> bool:
-        '''Removes a list of facts from the knowledge base.
-
-        Keyword arguments:
-        @param facts_to_remove: list -- facts to remove from the knowledge base. The entries are
-                                        tuples with two entries, the first representing
-                                        the name of the predicate and the second a list of
-                                        ("name", "value") pairs for the predicate parameters
-
-        '''
-        try:
-            self.__remove_predicates(fact_list, self.__kb_collection_name)
-            return True
-        except Exception as exc:
-            self.logger.error('[remove_facts] Facts could not be removed: ', exc_info=True)
-            return False
-
-    def update_predicate(self, predicate: Tuple[str, list]) -> bool:
-        '''Updates the given predicate in the knowledge base. The predicate
-        will be inserted if it does not already exist. Returns True if
-        the update is successful; returns False in case of any exceptions.
-
-        Keyword arguments:
-        @param predicate: Tuple[str, list] -- a tuple with two entries, the first representing
-                                              the name of the predicate and the second a list of
-                                              ("name", "value") pairs for the predicate parameters
-
-        '''
-        predicate_name = predicate[0]
-        try:
-            predicate_obj = Predicate.from_tuple(predicate)
-            predicate_dict = predicate_obj.to_dict()
-
-            collection = self.__get_kb_collection(self.__kb_collection_name)
-            collection.replace_one({'name': predicate_name,
-                                    'type': AssertionTypes.PREDICATE},
-                                   predicate_dict, upsert=True)
-            return True
-        except Exception as exc:
-            self.logger.error('[update_predicate] Predicate {0} could not be updated'.format(predicate_name), exc_info=True)
-            return False
 
     def insert_fluents(self, fluent_list: list) -> bool:
         '''Inserts a list of fluents into the knowledge base.
@@ -465,7 +268,7 @@ class KnowledgeBaseInterface(object):
             self.__insert_fluents(fluent_list, self.__kb_collection_name)
             return True
         except Exception as exc:
-            self.logger.error('[insert_fluents] Fluents could not be inserted:', exc_info=True)
+            print('[insert_fluents] Fluents could not be inserted:', exc_info=True)
             return False
 
     def remove_fluents(self, fluent_list: list) -> bool:
@@ -484,7 +287,7 @@ class KnowledgeBaseInterface(object):
             self.__remove_fluents(fluent_list, self.__kb_collection_name)
             return True
         except Exception as exc:
-            self.logger.error('[remove_fluents] Fluents could not be removed: ', exc_info=True)
+            print('[remove_fluents] Fluents could not be removed: ', exc_info=True)
             return False
 
     def update_fluent(self, fluent: Tuple[str, list, int]) -> bool:
@@ -507,44 +310,10 @@ class KnowledgeBaseInterface(object):
             collection = self.__get_kb_collection(self.__kb_collection_name)
             collection.replace_one({'name': fluent_name,
                                     'type': AssertionTypes.FLUENT},
-                                   fluent_dict, upsert=True)
+                                    fluent_dict, upsert=True)
             return True
         except Exception as exc:
-            self.logger.error('[update_fluent] Fluent {0} could not be updated'.format(fluent_name), exc_info=True)
-            return False
-
-    def insert_goals(self, goal_list: list) -> bool:
-        '''Inserts a list of planning goals into the knowledge base.
-
-        Keyword arguments:
-        @param goals_to_add: list -- goals to add to the knowledge base. The entries are
-                                     tuples with two entries, the first representing
-                                     the name of the predicate and the second a list of
-                                     ("name", "value") pairs for the predicate parameters
-
-        '''
-        try:
-            self.__insert_predicates(goal_list, self.__goal_collection_name)
-            return True
-        except Exception as exc:
-            self.logger.error('[insert_goals] Goals could not be inserted: ', exc_info=True)
-            return False
-
-    def remove_goals(self, goal_list: list) -> bool:
-        '''Removes a list of goals from the knowledge base.
-
-        Keyword arguments:
-        @param goals_to_remove: list -- goals to remove from the knowledge base. The entries are
-                                        tuples with two entries, the first representing
-                                        the name of the predicate and the second a list of
-                                        ("name", "value") pairs for the predicate parameters
-
-        '''
-        try:
-            self.__remove_predicates(goal_list, self.__goal_collection_name)
-            return True
-        except Exception as exc:
-            self.logger.error('[remove_goals] Goals could not be removed: ', exc_info=True)
+            print('[update_fluent] Fluent {0} could not be updated'.format(fluent_name), exc_info=True)
             return False
 
     def __get_kb_collection(self, collection_name: str) -> pm.collection.Collection:
@@ -553,17 +322,16 @@ class KnowledgeBaseInterface(object):
         Keyword arguments:
         @param collection_name: str -- name of a MongoDB collection
 
-        '''
-        client = pm.MongoClient()
-        db = client[self.__kb_database_name]
+        ''' 
+        db = self.db_client[self.__kb_database_name]
         collection = db[collection_name]
         return collection
 
     def __item_exists(self, item: dict, item_type: str, collection_name: str) -> ObjectId:
-        '''Returns True if the given predicate or fluent exists in the knowledge base.
+        '''Returns True if the given fluent exists in the knowledge base.
 
         Keyword arguments:
-        @param item: dict -- a dictionary representation of a Predicate or a Fluent object
+        @param item: dict -- a dictionary representation of a Fluent object
         @param item_type: str -- an AssertionTypes string indicating whether
                                  the item is a predicate or a fluent
 
@@ -583,41 +351,6 @@ class KnowledgeBaseInterface(object):
                 break
         return object_id
 
-    def __insert_predicates(self, predicate_list: list, collection_name: str) -> bool:
-        '''Inserts a list of predicates into the given collection.
-
-        Keyword arguments:
-        @param predicate_list: list -- tuple representations of Predicate objects
-        @param collection_name: pm.collection.Collection -- a MongoDB collection
-
-        '''
-        for predicate_tuple in predicate_list:
-            predicate = Predicate.from_tuple(predicate_tuple)
-            predicate_dict = predicate.to_dict()
-            if not self.__item_exists(predicate_dict, AssertionTypes.PREDICATE, collection_name):
-                collection = self.__get_kb_collection(collection_name)
-                collection.insert_one(predicate_dict)
-            else:
-                self.logger.warning('Predicate %s already exists', predicate.name)
-
-    def __remove_predicates(self, predicate_list: list, collection_name: str) -> bool:
-        '''Removes a list of predicates from the given collection.
-
-        Keyword arguments:
-        @param predicate_list: list -- tuple representations of Predicate objects
-        @param collection_name: pm.collection.Collection -- a MongoDB collection
-
-        '''
-        collection = self.__get_kb_collection(collection_name)
-        for predicate_tuple in predicate_list:
-            predicate = Predicate.from_tuple(predicate_tuple)
-            predicate_dict = predicate.to_dict()
-            object_id = self.__item_exists(predicate_dict, AssertionTypes.PREDICATE, collection_name)
-            if object_id:
-                collection.delete_one({'_id': object_id})
-            else:
-                self.logger.warning('Predicate %s does not exist', predicate.name)
-
     def __insert_fluents(self, fluent_list: list, collection_name: str) -> bool:
         '''Inserts a list of fluents into the given collection.
         If a fluent already exists, its value is updated.
@@ -634,7 +367,7 @@ class KnowledgeBaseInterface(object):
             if not self.__item_exists(fluent_dict, AssertionTypes.FLUENT, collection_name):
                 collection.insert_one(fluent_dict)
             else:
-                self.logger.warning('Fluent %s already exists; updating the value', fluent.name)
+                print(f'Fluent {fluent.name} already exists; updating the value')
                 collection.replace_one({'name': fluent_dict['name'],
                                         'params': fluent_dict['params']},
                                        fluent_dict)
@@ -655,4 +388,4 @@ class KnowledgeBaseInterface(object):
             if object_id:
                 collection.delete_one({'_id': object_id})
             else:
-                self.logger.warning('Fluent %s does not exist; nothing to remove', fluent.name)
+                print(f'Fluent {fluent.name} does not exist; nothing to remove')

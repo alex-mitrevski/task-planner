@@ -6,3 +6,5 @@ config/plan_*
 
 # problem files
 config/problem_*
+
+*.DS_Store

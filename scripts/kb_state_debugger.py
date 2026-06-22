@@ -2,34 +2,36 @@
 import os
 import time
 from task_planner.knowledge_base_interface import KnowledgeBaseInterface
-import logging
 
 
-def get_predicate_values(instance):
+def get_param_values(instance):
     values = [v.value for v in instance.params]
     return values
 
 
 if __name__ == '__main__':
-    logging.getLogger().setLevel(logging.DEBUG)
-
-    kb_interface = KnowledgeBaseInterface('ropod_kb')
+    kb_interface = KnowledgeBaseInterface('test_kb')
     try:
         while True:
-            predicates = kb_interface.get_predicate_names()
-            for predicate in predicates:
-                predicate_instances = kb_interface.get_predicate_assertions(predicate)
-                if predicate_instances:
-                    logging.info(predicate)
-                    logging.info('--------------------')
-                    for instance in predicate_instances:
-                        predicate_values = get_predicate_values(instance)
+            fluents = kb_interface.get_fluent_names()
+            for fluent in fluents:
+                fluent_instances = kb_interface.get_fluent_assertions(fluent)
+                if fluent_instances:
+                    print(fluent)
+                    print('--------------------')
+                    for instance in fluent_instances:
+                        param_values = get_param_values(instance)
                         instance_str = ''
-                        for v in predicate_values[0:-1]:
+                        for v in param_values[0:-1]:
                             instance_str += '{0}, '.format(v)
-                        instance_str += '{0}'.format(predicate_values[-1])
-                        logging.debug('%s: ( %s )', predicate, instance_str)
+                        instance_str += '{0}'.format(param_values[-1])
+
+                        if instance.value != 'true' and instance.value != 'false':
+                            print(f'{fluent}: ( {instance_str} {instance.value} )')
+                        else:
+                            print(f'{fluent}: ( {instance_str} )')
+                    print()
             time.sleep(1.)
             os.system('clear')
     except (KeyboardInterrupt, SystemExit):
-        logging.info('Ending knowledge base visualiser')
+        print('Ending knowledge base visualiser')
