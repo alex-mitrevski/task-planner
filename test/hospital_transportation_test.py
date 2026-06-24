@@ -21,7 +21,7 @@ class LamaPlannerTest(unittest.TestCase):
         self.client = pm.MongoClient(host=host, port=port)
 
         planner_config_params = get_planner_config('../config/planner_config.yaml')
-        domain_file = planner_config_params['domain_file']
+        domain_file = os.path.join(planner_config_params['domain_path'], 'hospital_transportation.pddl')
         planner_cmd = planner_config_params['planner_cmd']
         plan_file_path = planner_config_params['plan_file_path']
         self.planner_interface = LAMAInterface(self.test_kb_name, domain_file,

@@ -1,10 +1,11 @@
+import os
 import yaml
 from task_planner.lama_interface import LAMAInterface
 
 if __name__ == '__main__':
     with open('../config/planner_config.yaml', 'r') as config_file:
         planner_config = yaml.safe_load(config_file)
-        domain_file = planner_config['domain_file']
+        domain_file = os.path.join(planner_config['domain_path'], 'hospital_transportation.pddl')
         planner_cmd = planner_config['planner_cmd']
         plan_file_path = planner_config['plan_file_path']
 
