@@ -1,28 +1,27 @@
 import uuid
 
-class Action(object):
-    def __init__(self):
-        self.id = ''
-        self.type = ''
-        self.goal = ''
+from task_planner.action_models.action_model_base import ActionModelBase, Action
 
-class ActionModelLibrary(object):
+class HospitalTransportationActionModels(ActionModelBase):
+    def __init__(self):
+        super(HospitalTransportationActionModels, self).__init__()
+
     @staticmethod
     def get_action_model(action_name: str, action_params: list) -> Action:
         action = Action()
         action.id = str(uuid.uuid4())
         action.type = action_name
-        action = getattr(ActionModelLibrary, action_name)(action, action_params)
+        action = getattr(HospitalTransportationActionModels, action_name)(action, action_params)
         return action
 
     @staticmethod
     def GOTO(action: Action, params: list) -> Action:
-        action.goal = params[2]
+        action.params = {'destination': params[2]}
         return action
 
     @staticmethod
     def DOCK(action: Action, params: list) -> Action:
-        action.goal = params[2]
+        action.params = {'load': params[1]}
         return action
 
     @staticmethod
@@ -47,5 +46,5 @@ class ActionModelLibrary(object):
 
     @staticmethod
     def EXIT_ELEVATOR(action: Action, params: list) -> Action:
-        action.goal = params[2]
+        action.params = {'destination': params[1]}
         return action
