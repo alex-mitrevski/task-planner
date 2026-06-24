@@ -1,20 +1,29 @@
 from abc import abstractmethod
-from typing import Tuple
+from importlib import import_module
 from task_planner.knowledge_base_interface import KnowledgeBaseInterface
+from task_planner.knowledge_models import get_knowledge_model_classes
+from task_planner.action_models import get_action_model_class
 
 class TaskPlannerInterface(object):
     def __init__(self, kb_database_name, domain_file, planner_cmd, plan_file_path, debug=False):
         self.kb_interface = KnowledgeBaseInterface(kb_database_name)
+
         self.domain_file = domain_file
         self.domain_name = self.__get_domain_name(self.domain_file)
         self.planner_cmd = planner_cmd.replace('DOMAIN', self.domain_file)
         self.plan_file_path = plan_file_path
+
+        knowledge_module, (fluent_lib_name, numeric_fluent_lib_name) = get_knowledge_model_classes(self.domain_name)
+        self.fluent_lib = getattr(import_module(knowledge_module), fluent_lib_name)
+        self.numeric_fluent_lib = getattr(import_module(knowledge_module), numeric_fluent_lib_name)
+
+        action_module, action_lib_name = get_action_model_class(self.domain_name)
+        self.action_model_lib = getattr(import_module(action_module), action_lib_name)
+
         self.debug = debug
 
     @abstractmethod
-    def plan(self, task_request,
-             robot: str,
-             plan_goals: list=None):
+    def plan(self, robot: str, plan_goals: list=None):
         pass
 
     @abstractmethod
@@ -27,7 +36,7 @@ class TaskPlannerInterface(object):
 
     @abstractmethod
     def parse_plan(self, plan_file_abs_path: str, task: str,
-                   robot: str) -> Tuple[bool, list]:
+                   robot: str) -> tuple[bool, list]:
         pass
 
     def __get_domain_name(self, domain_file_name: str) -> str:

@@ -7,10 +7,6 @@ import numpy as np
 
 from task_planner.planner_interface import TaskPlannerInterface
 from task_planner.knowledge_base_interface import Fluent
-from task_planner.action_models import ActionModelLibrary
-from task_planner.knowledge_models import PDDLFluentLibrary,\
-                                          PDDLNumericFluentLibrary
-
 
 class LAMAInterface(TaskPlannerInterface):
     _plan_file_name = 'plan.txt'
@@ -67,11 +63,11 @@ class LAMAInterface(TaskPlannerInterface):
         # otherwise, we generate strings of the form
         # (predicate_name param_1 param_2 ... param_n)
         for assertion in fluent_assertions:
-            if hasattr(PDDLFluentLibrary, assertion.name):
-                ordered_param_list, obj_types = PDDLFluentLibrary.get_assertion_param_list(assertion.name,
-                                                                                           assertion.params,
-                                                                                           assertion.value,
-                                                                                           obj_types)
+            if hasattr(self.fluent_lib, assertion.name):
+                ordered_param_list, obj_types = self.fluent_lib.get_assertion_param_list(assertion.name,
+                                                                                         assertion.params,
+                                                                                         assertion.value,
+                                                                                         obj_types)
 
                 # if the fluent assertion contains a value that is not of Boolean type,
                 # we explicitly add the value to the assertion string; otherwise,
@@ -88,9 +84,9 @@ class LAMAInterface(TaskPlannerInterface):
                     assertion_str = '        not ({0} {1})\n'.format(assertion.name,
                                                                      ' '.join(ordered_param_list))
             else:
-                ordered_param_list, obj_types = PDDLNumericFluentLibrary.get_assertion_param_list(assertion.name,
-                                                                                                  assertion.params,
-                                                                                                  obj_types)
+                ordered_param_list, obj_types = self.numeric_fluent_lib.get_assertion_param_list(assertion.name,
+                                                                                                 assertion.params,
+                                                                                                 obj_types)
                 assertion_str = '        (= ({0} {1}) {2})\n'.format(assertion.name,
                                                                      ' '.join(ordered_param_list),
                                                                      assertion.value)
@@ -170,7 +166,11 @@ class LAMAInterface(TaskPlannerInterface):
 
         plans = []
         action_strings_per_plan = []
+        plan_counter = 1
         for plan_file_name in plan_files:
+            if self.debug:
+                print(f'Processing plan {plan_counter} out of {len(plan_files)}')
+
             plan = []
             plan_action_strings = []
             current_plan_file_path = join(self.plan_file_path, plan_file_name)
@@ -184,10 +184,14 @@ class LAMAInterface(TaskPlannerInterface):
                         action = self.process_action_str(action_line)
                         plan.append(action)
                         plan_action_strings.append(action_line)
-                        print(action_line)
+                        if self.debug:
+                            print(f'Action line from plan: {action_line}')
                 plans.append(plan)
                 action_strings_per_plan.append(plan_action_strings)
             os.remove(current_plan_file_path)
+            plan_counter += 1
+            if self.debug:
+                print()
 
         plan_lengths = [len(plan) for plan in plans]
         shortest_plan_idx = np.argmin(plan_lengths)
@@ -204,5 +208,7 @@ class LAMAInterface(TaskPlannerInterface):
         action_data = action_line.split()
         action_name = action_data[0].upper()
         action_params = action_data[1:]
-        action = ActionModelLibrary.get_action_model(action_name, action_params)
+        action = self.action_model_lib.get_action_model(action_name, action_params)
+        if self.debug:
+            print(f'Grounded action: {action}')
         return action
